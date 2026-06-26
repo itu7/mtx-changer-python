@@ -158,7 +158,7 @@ Usage:
     mtx-changer-python.py -v | --version
 
 Options:
--c, --config <config>     Configuration file. [default: /opt/bacula/scripts/mtx-changer-python.conf]
+-c, --config <config>     Configuration file. [default: /opt/mtx-changer-python/mtx-changer-python.conf]
 -s, --section <section>   Section in configuration file. [default: DEFAULT]
 -i, --jobid <jobid>       The JobId. [default: None]
 -j, --jobname <jobname>   The Job name. [default: None]
@@ -610,7 +610,7 @@ def get_sg_node():
         result = get_shell_result(cmd)
         log_cmd_results(result)
         chk_cmd_result(result, cmd)
-        sg_search = re.search('.*' + st + ' .*(/dev/sg\\d+)', result.stdout)
+        sg_search = re.search('.*' + re.sub('nst', 'st', st) + ' .*(/dev/sg\\d+)', result.stdout)
         if sg_search:
             sg = sg_search.group(1)
             log('SG node for drive device: ' + drive_device + ' (drive index: ' + drive_index + ') --> ' + sg, 20)
