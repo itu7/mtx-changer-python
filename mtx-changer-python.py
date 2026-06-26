@@ -65,7 +65,7 @@
 # Additionally, new, optional parameters such as a configuration file, configuration section,
 # a jobid, and jobname may also be specified:
 #
-# mtx-changer-python.py [-c <config>] [-s <section>] [-i <jobid>] [-j <jobname>] <chgr_device> <mtx_cmd> <slot> <drive_device> <drive_index>
+# mtx-changer-python.py [-c <config>] [-s <section>] [-i <jobid>] [-j <jobname>] [-d <drive_scsi_device>] <chgr_device> <mtx_cmd> <slot> <drive_device> <drive_index>
 #
 # All <required> parameters must be passed to the script and they must be in the correct order as listed above.
 # Bacula's SD will always pass all options specified on the ChangerCommand line even though in some cases not
@@ -152,10 +152,11 @@ fbsd_bin_lst = ['camcontrol_bin']
 # ---------------------------------------------------------------------------------------------------------------------------------
 parser = argparse.ArgumentParser(prog=scriptname, description='Drop-in replacement for mtx-changer bash/perl script with more features.')
 parser.add_argument('-v', '--version', help='Print the script version.', version=scriptname + " v" + version, action='version')
-parser.add_argument('-c', '--config', help='Configuration file.', default='/opt/bacula/scripts/mtx-changer-python.conf', type=argparse.FileType('r'))
+parser.add_argument('-c', '--config', help='Configuration file.', default='/opt/mtx-changer-python/mtx-changer-python.conf', type=argparse.FileType('r'))
 parser.add_argument('-s', '--section', help='Section in configuration file.', default='DEFAULT')
 parser.add_argument('-i', '--jobid', help='The jobid.', default=None)
 parser.add_argument('-j', '--jobname', help='The job name.', default=None)
+parser.add_argument('-d', '--device', help='The drive\'s scsi generic device node.', default=None)
 parser.add_argument('chgr_device', help='The library\'s /dev/sg#, or /dev/tape/by-id/*, or /dev/tape/by-path/* node.')
 parser.add_argument('mtx_cmd', help='The mtx command to issue.', choices=valid_mtx_cmd_lst)
 parser.add_argument('slot', help='The one-based library slot to load/unload, or the source slot for the transfer command.')
@@ -560,7 +561,12 @@ def get_sg_node():
     'Given a drive_device, return the /dev/sg# node.'
     log('In function: get_sg_node()', 50)
     log('Determining the tape drive\'s scsi generic device node required by sg_logs', 20)
-    if uname == 'Linux':
+    # Set device node by argument
+    if '/dev' in drive_scsi_device:
+        sg = drive_scsi_device
+        log('SG node for drive device: ' + drive_device + ' (drive index: ' + drive_index + ') --> ' + sg, 20)
+        return sg
+    elif uname == 'Linux':
         # Use `lsscsi` on Linux to always identify the
         # correct scsi generic device node on-the-fly.
         # --------------------------------------------
@@ -981,6 +987,7 @@ drive_index = args.drive_index
 slot = args.slot
 jobid = args.jobid
 jobname = args.jobname
+drive_scsi_device = args.device
 
 # Should we strip the long datestamp off
 # of the jobname passed to us by the SD?
