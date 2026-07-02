@@ -26,51 +26,6 @@
 # settings.
 # ----------------------------------------------------------------------------
 #
-# Modified notes from the original bash/perl mtx-changer script
-# -------------------------------------------------------------
-# This script is called by the Bacula SD, configured in the
-# Autochanger's ChangerCommand setting like in this default example:
-#
-# ChangerCommand = "/opt/bacula/scripts/mtx-changer-python.py %c %o %S %a %d"
-#
-# Additionally, new, optional parameters such as a configuration file, configuration section,
-# a jobid, and jobname may also be specified:
-#
-# mtx-changer-python.py [-c <config>] [-s <section>] [-i <jobid>] [-j <jobname>] <chgr_device> <mtx_cmd> <slot> <drive_device> <drive_index>
-#
-# All <required> parameters must be passed to the script and they must be in the correct order as listed above.
-# Bacula's SD will always pass all options specified on the ChangerCommand line even though in some cases not
-# all of them are needed.
-#
-# In the example command line above, we can see that the parameters '-c config', '-s section', '-i jobid',
-# and '-j jobname' are optional but if used they must come before (or after) the other <required> parameters.
-#
-# For example, if you wanted to use a specific section in the default config file, and also wanted to have
-# the jobid and job name written to every line in the log file, the following ChangerCommand command line would work:
-#
-# ChangerCommand = "/opt/bacula/scripts/mtx-changer-python.py -s My_Section -i %i -j %j %c %o %S %a %d"
-#
-# NOTE: The %i is not supported by the SD ChangerCommand in Bacula Community before 15.0.2
-#       and Bacula Enterprise before 18.0.0. This option should be available on or about November 14, 2023.
-#
-#
-#  Valid '<mtx_cmd>' commands are:
-#  - list      List available volumes in slot:volume format.
-#  - listall   List all slots in one of the following formats:
-#              - For Drives:         D:drive index:F:slot:volume - D:0:F:5:G03005TA or for an empty drive:               D:3:E
-#              - For Slots:          S:slot:F:volume             - S:2:F:G03002TA   or for an empty slot:                S:1:E
-#              - For Import/Export:  I:slot:F:volume             - I:41:F:G03029TA  or for am empty import/export slot:  I:42:E
-#  - slots     Show the number of slots in the autochanger.
-#  - load      Load a a slot to a drive.
-#  - unload    Unload a drive to a slot.
-#  - loaded    Show which slot is loaded in a drive, else 0 if the drive is empty.
-#  - transfer  Transfer a volume from one slot to another. In this case, the <drive_device> is the destination slot.
-#
-#  Slots are numbered from 1.
-#  Drives are numbered from 0.
-#
-# -----------------------------------------------------------------------
-#
 # BSD 2-Clause License
 #
 # Copyright (c) 2023, William A. Arlofski waa@revpol.com
@@ -100,6 +55,49 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # -----------------------------------------------------------------------
 #
+# Modified notes from the original bash/perl mtx-changer script
+# -------------------------------------------------------------
+# This script is called by the Bacula SD, configured in the
+# Autochanger's ChangerCommand setting like in this default example:
+#
+# ChangerCommand = "/opt/bacula/scripts/mtx-changer-python.py %c %o %S %a %d"
+#
+# Additionally, new, optional parameters such as a configuration file, configuration section,
+# a jobid, and jobname may also be specified:
+#
+# mtx-changer-python.py [-c <config>] [-s <section>] [-i <jobid>] [-j <jobname>] <chgr_device> <mtx_cmd> <slot> <drive_device> <drive_index>
+#
+# All <required> parameters must be passed to the script and they must be in the correct order as listed above.
+# Bacula's SD will always pass all options specified on the ChangerCommand line even though in some cases not
+# all of them are needed.
+#
+# In the example command line above, we can see that the parameters '-c config', '-s section', '-i jobid',
+# and '-j jobname' are optional.
+#
+# For example, if you wanted to use a specific section in the default config file, and also wanted to have
+# the jobid and job name written to every line in the log file, the following ChangerCommand command line would work:
+#
+# ChangerCommand = "/opt/bacula/scripts/mtx-changer-python.py -s My_Section -i %i -j %j %c %o %S %a %d"
+#
+# NOTE: The %i is not supported by the SD ChangerCommand in Bacula Community before 15.0.2
+#       and Bacula Enterprise before 18.0.0. This option should be available on or about November 14, 2023.
+#
+#
+#  Valid '<mtx_cmd>' commands are:
+#  - list      List available volumes in slot:volume format.
+#  - listall   List all slots in one of the following formats:
+#              - For Drives:         D:drive index:F:slot:volume - D:0:F:5:G03005TA or for an empty drive:               D:3:E
+#              - For Slots:          S:slot:F:volume             - S:2:F:G03002TA   or for an empty slot:                S:1:E
+#              - For Import/Export:  I:slot:F:volume             - I:41:F:G03029TA  or for am empty import/export slot:  I:42:E
+#  - slots     Show the number of slots in the autochanger.
+#  - load      Load a a slot to a drive.
+#  - unload    Unload a drive to a slot.
+#  - loaded    Show which slot is loaded in a drive, else 0 if the drive is empty.
+#  - transfer  Transfer a volume from one slot to another. In this case, the <drive_device> is the destination slot.
+#
+#  Slots are numbered from 1.
+#  Drives are numbered from 0.
+#
 # ============================================================
 # Nothing below this line should need to be modified
 # Set variables in /opt/bacula/scripts/mtx-changer-python.conf
@@ -112,26 +110,26 @@ import re
 import sys
 import random
 import shutil
+import argparse
 import subprocess
 from time import sleep
-from docopt import docopt
 from datetime import datetime
 from configparser import ConfigParser, BasicInterpolation
 
 # Set some variables
 # ------------------
 progname = 'MTX-Changer-Python'
-version = '1.26'
-reldate = 'May 10, 2023'
+version = '1.31'
+reldate = 'August 07, 2024'
 progauthor = 'Bill Arlofski'
 authoremail = 'waa@revpol.com'
 scriptname = 'mtx-changer-python.py'
-prog_info_txt = progname + ' - v' + version + ' - ' + scriptname \
+prog_info_txt = '\n' + progname + ' - v' + version + ' - ' + scriptname \
                 + '\nBy: ' + progauthor + ' ' + authoremail + ' (c) ' + reldate + '\n\n'
 
 # List of valid mtx_cmd choices:
 # ------------------------------
-valid_mtx_cmd_lst = ['slots', 'list', 'listall', 'loaded', 'load', 'unload', 'transfer']
+valid_mtx_cmd_lst = ['list', 'listall', 'load', 'loaded', 'slots', 'transfer', 'unload']
 
 # This list is so that we can reliably convert the True/False strings
 # from the config file into real booleans to be used in later tests.
@@ -149,31 +147,21 @@ slot = drive_device = drv_idx = drive_index = ''
 linux_bin_lst = ['lsscsi_bin']
 fbsd_bin_lst = ['camcontrol_bin']
 
-# Define the docopt string
-# ------------------------
-doc_opt_str = """
-Usage:
-    mtx-changer-python.py [-c <config>] [-s <section>] [-i <jobid>] [-j <jobname>] <chgr_device> <mtx_cmd> <slot> <drive_device> <drive_index>
-    mtx-changer-python.py -h | --help
-    mtx-changer-python.py -v | --version
-
-Options:
--c, --config <config>     Configuration file. [default: /opt/mtx-changer-python/mtx-changer-python.conf]
--s, --section <section>   Section in configuration file. [default: DEFAULT]
--i, --jobid <jobid>       The JobId. [default: None]
--j, --jobname <jobname>   The Job name. [default: None]
-
-chgr_device               The library's /dev/sg#, or /dev/tape/by-id/*, or /dev/tape/by-path/* node.
-mtx_cmd                   Valid commands are: slots, list, listall, loaded, load, unload, transfer.
-slot                      The one-based library slot to load/unload, or the source slot for the transfer command.
-drive_device              The drive's /dev/nst#, or /dev/tape/by-id/*-nst, or /dev/tape/by-path/* node.
-                          Or, the destination slot for the transfer command.
-drive_index               The zero-based drive index.
-
--h, --help                Print this help message
--v, --version             Print the script name and version
-
-"""
+# Define the argparse arguments, descriptions, defaults, etc
+# waa - Something to look into: https://www.reddit.com/r/Python/comments/11hqsbv/i_am_sick_of_writing_argparse_boilerplate_code_so/
+# ---------------------------------------------------------------------------------------------------------------------------------
+parser = argparse.ArgumentParser(prog=scriptname, description='Drop-in replacement for mtx-changer bash/perl script with more features.')
+parser.add_argument('-v', '--version', help='Print the script version.', version=scriptname + " v" + version, action='version')
+parser.add_argument('-c', '--config', help='Configuration file.', default='/opt/bacula/scripts/mtx-changer-python.conf', type=argparse.FileType('r'))
+parser.add_argument('-s', '--section', help='Section in configuration file.', default='DEFAULT')
+parser.add_argument('-i', '--jobid', help='The jobid.', default=None)
+parser.add_argument('-j', '--jobname', help='The job name.', default=None)
+parser.add_argument('chgr_device', help='The library\'s /dev/sg#, or /dev/tape/by-id/*, or /dev/tape/by-path/* node.')
+parser.add_argument('mtx_cmd', help='The mtx command to issue.', choices=valid_mtx_cmd_lst)
+parser.add_argument('slot', help='The one-based library slot to load/unload, or the source slot for the transfer command.')
+parser.add_argument('drive_device', help='The drive\'s /dev/nst#, /dev/tape/by-id/*-nst, /dev/tape/by-path/* node. Or, the destination slot for the transfer command.')
+parser.add_argument('drive_index', help='The zero-based drive index.')
+args = parser.parse_args()
 
 # Now for some functions
 # ----------------------
@@ -183,7 +171,7 @@ def now():
 
 def usage():
     'Show the instructions and script information.'
-    print(doc_opt_str)
+    parser.print_help()
     print(prog_info_txt)
     sys.exit(1)
 
@@ -194,8 +182,8 @@ def log(text, level, hdr=None):
             file.write(('\n' if '[ Starting ' in text else '') \
             + now() + ' ' \
             + (chgr_name + ' ' if len(chgr_name) != 0 else '') \
-            + ('JobId: ' + jobid + ' ' if jobid not in ('', '0', 'None') else '') \
-            + ('Job: ' + jobname + ' ' if jobname not in ('', 'None', '*System*') else (jobname + ' ' if jobname != 'None' else '')) \
+            + ('JobId: ' + jobid + ' ' if jobid not in ('', '0', None) else '') \
+            + ('Job: ' + jobname + ' ' if jobname not in ('', None, '*System*') else (jobname + ' ' if jobname != None else '')) \
             + ('- ' if hdr is None else '| ') + text.rstrip('\n') + '\n')
 
 def print_opt_errors(opt, bin_var=None, tfk=None, tfv=None):
@@ -208,9 +196,7 @@ def print_opt_errors(opt, bin_var=None, tfk=None, tfv=None):
         error_txt = 'The binary variable \'' + bin_var[0] + '\', pointing to \'' + bin_var[1] + '\' does not exist or is not executable.'
     elif opt == 'truefalse':
         error_txt = 'The variable \'' + tfk + '\' (' + tfv + ') must be a boolean \'True\' or \'False\'.'
-    elif opt == 'mtx_cmd':
-        error_txt = 'The mtx_cmd variable \'' + mtx_cmd  + '\' is invalid.\nValid mtx_cmd choices are: ' + ', '.join(valid_mtx_cmd_lst)
-    return '\n' + error_txt
+    return '\n' + error_txt + '\n'
 
 def log_cmd_results(result):
     'Given a subprocess.run() result object, clean up the extra line feeds from stdout and stderr and log them.'
@@ -228,7 +214,9 @@ def log_cmd_results(result):
 def chk_cmd_result(result, cmd):
     'Given a result object, check the returncode, then log and exit if non zero.'
     log('In function: chk_cmd_result()', 50)
-    if result.returncode != 0:
+    if 'sg_logs' in cmd and result.returncode == 6:
+        return result.returncode
+    elif result.returncode != 0:
         log('ERROR calling: ' + cmd, 20)
         # The SD will print this stdout after 'Result=' in the job log
         # ------------------------------------------------------------
@@ -525,7 +513,7 @@ def wait_for_drive(vol):
         if re.search(ready, result.stdout):
             log('Device ' + drive_device + ' (drive index: ' + drive_index + ') ready', 20)
             break
-        log('Device ' + drive_device + ' (drive index: ' + drive_index + ') not ready, sleeping for one second and retrying...', 20)
+        log('Device ' + drive_device + ' (drive index: ' + drive_index + ') not ready, sleeping for one second and retrying...', 30)
         sleep(1)
         s += 1
     if s == int(load_wait) + 1:
@@ -561,7 +549,6 @@ def clean(cln_tapes):
     'Given the cln_tapes list of available cleaning tapes, randomly pick one and load it.'
     log('In function: clean()', 50)
     log('Selecting a cleaning tape', 20)
-    # cln_tuple = random.choice(cln_tapes)
     cln_tuple = random.choice(cln_tapes)
     cln_slot = cln_tuple[0]
     cln_vol = cln_tuple[1]
@@ -663,7 +650,39 @@ def tapealerts(sg):
     log('sg_logs command: ' + cmd, 30)
     result = get_shell_result(cmd)
     log_cmd_results(result)
-    chk_cmd_result(result, cmd)
+    # waa - 20240516 - It seems, that on a physical drive (not on mhVTL), the first time
+    #                  sg_logs is called, we get a "unit attention" (returncode 6), and
+    #                  no information about a Cleaning action required (or not required)
+    #                  so we check for this and then just make the sg_logs call again
+    #                  and report those results.
+    # ----------------------------------------------------------------------------------
+    # EXAMPLE:
+    # --------
+    # mtx -f /dev/tape/by-id/scsi-3500110a000896f20 unload 14 1 && sg_logs --page=0xc /dev/sg5
+    # Unloading drive 1 into Storage Element 14...done
+    #     HP        Ultrium 5-SCSI    Z6KW
+    # log sense:  Fixed format, current;  Sense key: Unit Attention
+    #  Additional sense: Mode parameters changed
+    # log_sense: unit attention
+    # echo $?
+    # 6
+    # sg_logs --page=0xc /dev/sg5
+    #     HP        Ultrium 5-SCSI    Z6KW
+    # Sequential access device page (ssc-3)
+    #   Data bytes received with WRITE commands: 0 GB
+    #   Data bytes written to media by WRITE commands: 0 GB
+    #   Data bytes read from media by READ commands: 0 GB
+    #   Data bytes transferred by READ commands: 0 GB
+    #   Native capacity from BOP to EOD: 4294967295 MB
+    #   Native capacity from BOP to EW of current partition: 4294967295 MB
+    #   Minimum native capacity from EW to EOP of current partition: 4294967295 MB
+    #   Native capacity from BOP to current position: 4294967295 MB
+    #   Maximum native capacity in device object buffer: 0 MB
+    #   Cleaning action not required (or completed)
+    if chk_cmd_result(result, cmd) == 6:
+        log('Recieved a "unit attention" status, retrying...', 30)
+        result = get_shell_result(cmd)
+        log_cmd_results(result)
     # Some example `sg_logs` outputs showing Cleaning status messages
     # ---------------------------------------------------------------
     # sg_logs --page=0xc /dev/sg7 | grep "Cleaning action"
@@ -735,11 +754,11 @@ def load(slt=None, drv_dev=None, drv_idx=None, vol=None, cln=False):
     # Don't bother trying to load a tape into a drive that is full
     # ------------------------------------------------------------
     if loaded() != '0':
-        log('Exiting with return code 1', 30)
+        log('Can\'t load a drive that is full, exiting with return code 1', 20)
         return 1
     # Don't bother trying to load a tape from a slot that is empty
     # ------------------------------------------------------------
-    elif vol == '':
+    elif vol[0] == '':
         log('Slot ' + slt + ' is empty, exiting with return code 1', 20)
         return 1
     else:
@@ -798,13 +817,12 @@ def unload(slt=None, drv_dev=None, drv_idx=None, vol=None, cln=False):
     # Don't bother trying to unload an empty drive
     # --------------------------------------------
     if loaded() == '0':
-        log('Exiting with return code 0', 30)
-        return 0
+        log('Can\'t unload a drive that is empty, exiting with return code 1', 20)
+        return 1
     # Don't bother trying to unload a tape into a full slot
     # -----------------------------------------------------
     elif vol[1] != '':
-        log('Slot ' + slt + ' is full with volume (' + vol[1] + ')', 20)
-        log('Exiting with return code 1', 30)
+        log('Slot ' + slt + ' is full with volume (' + vol[1] + '), exiting with return code 1', 20)
         return 1
     else:
         if offline:
@@ -911,14 +929,10 @@ def transfer():
 # ================
 # BEGIN the script
 # ================
-# Assign docopt doc string variable
-# ---------------------------------
-args = docopt(doc_opt_str, version='\n' + progname + ' - v' + version + '\n' + reldate + '\n')
-
 # Check for and parse the configuration file first
 # ------------------------------------------------
-config_file = args['--config']
-config_section = args['--section']
+config_file = args.config.name
+config_section = args.section
 if not os.path.exists(config_file) or not os.access(config_file, os.R_OK):
     print(print_opt_errors('config'))
     usage()
@@ -958,25 +972,23 @@ for k, v in config_dict.items():
     # -----------------------
     myvars[k] = config_dict[k]
 
-# Assign variables from args set
-# ------------------------------
-mtx_cmd = args['<mtx_cmd>']
-if mtx_cmd not in valid_mtx_cmd_lst:
-    print(print_opt_errors('mtx_cmd'))
-    usage()
-chgr_device = args['<chgr_device>']
-drive_device = args['<drive_device>']
-drive_index = args['<drive_index>']
-slot = args['<slot>']
-jobid = args['--jobid']
+# Assign variables from argparse Namespace
+# ----------------------------------------
+mtx_cmd = args.mtx_cmd
+chgr_device = args.chgr_device
+drive_device = args.drive_device
+drive_index = args.drive_index
+slot = args.slot
+jobid = args.jobid
+jobname = args.jobname
 
 # Should we strip the long datestamp off
 # of the jobname passed to us by the SD?
 # --------------------------------------
-if args['--jobname'] is not None and strip_jobname:
-    jobname = re.sub(r'(^.*)\.\d{4}\-\d{2}-\d{2}_.*', '\\1', args['--jobname'])
+if jobname is not None and strip_jobname:
+    jobname = re.sub(r'(^.*)\.\d{4}\-\d{2}-\d{2}_.*', '\\1', args.jobname)
 else:
-    jobname = args['--jobname']
+    pass
 
 # Check the boolean variables
 # ---------------------------
@@ -989,11 +1001,11 @@ for var in cfg_file_true_false_lst:
 # level of 10, log command line
 # variables to log file
 # ------------------------------
-log('-'*10 + '[ Starting ' + sys.argv[0] + ' v' + version + ' ]' + '-'*10 , 10, hdr=True)
-log('Config File: ' + args['--config'], 10, hdr=True)
-log('Config Section: [' + args['--section'] + ']', 10, hdr=True)
-log(('JobId: ' + jobid if jobid not in ('0', 'None') else ''), 10, hdr=True)
-log(('Job Name: ' + jobname if jobname != 'None' else ''), 10, hdr=True)
+log('-'*10 + '[ Starting ' + progname + ' v' + version + ' ]' + '-'*10 , 10, hdr=True)
+log('Config File: ' + config_file, 10, hdr=True)
+log('Config Section: [' + config_section + ']', 10, hdr=True)
+log(('JobId: ' + jobid if jobid not in ('0', None) else ''), 10, hdr=True)
+log(('Job Name: ' + jobname if jobname != None else ''), 10, hdr=True)
 log('Changer Device: ' + chgr_device, 10, hdr=True)
 log('Drive Device: ' + drive_device, 10, hdr=True)
 log('Command: ' + mtx_cmd, 10, hdr=True)
@@ -1047,7 +1059,7 @@ if mtx_cmd in ('load', 'loaded', 'unload', 'transfer'):
 if mtx_cmd == 'list':
     print(list())
 elif mtx_cmd == 'listall':
-   print(all_slots)
+    print(all_slots)
 elif mtx_cmd == 'slots':
     print(slots())
 elif mtx_cmd == 'loaded':
@@ -1059,7 +1071,4 @@ elif mtx_cmd == 'unload':
     result = unload()
     sys.exit(result)
 elif mtx_cmd == 'transfer':
-   transfer()
-else:
-    print(print_opt_errors('command'))
-    usage()
+    transfer()
