@@ -119,13 +119,24 @@ from configparser import ConfigParser, BasicInterpolation
 # Set some variables
 # ------------------
 progname = 'MTX-Changer-Python'
-version = '1.32'
-reldate = 'October 29, 2024'
+version = '1.33'
+reldate = 'May 13, 2026'
 progauthor = 'Bill Arlofski'
 authoremail = 'waa@revpol.com'
 scriptname = 'mtx-changer-python.py'
 prog_info_txt = '\n' + progname + ' - v' + version + ' - ' + scriptname \
                 + '\nBy: ' + progauthor + ' ' + authoremail + ' (c) ' + reldate + '\n\n'
+
+# Define defaults for all of the possible
+# variables in the config_dict dictionary
+# ---------------------------------------
+config_dict = {'ls_bin': 'ls', 'mt_bin': 'mt', 'mtx_bin': 'mtx', 'uname_bin': 'uname', \
+               'sglogs_bin': 'sg_logs', 'mtx_log_file': '/opt/bacula/log/mtx-changer-python.log', \
+               'lsscsi_bin': 'lsscsi', 'camcontrol_bin': 'camcontrol', 'offline': False, 'offline_sleep': '15', \
+               'load_wait': '300', 'load_sleep': '15', 'inventory': False, 'include_import_export': False, \
+               'vxa_packetloader': False, 'strip_jobname': True, 'chgr_name_hdr_only': False, 'jobid_hdr_only': False, \
+               'jobname_hdr_only': False, 'chk_drive': True, 'auto_clean': False, 'clean_wait': '30', 'cln_str': 'CLN', \
+               'chgr_name': '', 'log_cfg_vars': False, 'debug_level': '20'}
 
 # List of valid mtx_cmd choices:
 # ------------------------------
@@ -654,6 +665,9 @@ def tapealerts(sg):
     # -------------------------------------------------------------------------------
     # Call sg_logs and parse for 'Cleaning action required'
     # -----------------------------------------------------
+    # waa - 20260507 - sglogs does not work with lin_tape. I will
+    #                  need a lin_tape specific binary call.
+    # -----------------------------------------------------------
     cmd = sglogs_bin + ' --page=0xc ' + sg
     log('Checking' + ' drive (sg node: ' + sg + ') with sg_logs utility', 20)
     log('sg_logs command: ' + cmd, 30)
@@ -856,14 +870,14 @@ def unload(slt=None, drv_dev=None, drv_idx=None, vol=None, cln=False):
     else:
         if offline:
             log('The \'offline\' variable is True. Sending drive device ' + drv_dev \
-                + ' offline command before unloading it', 30)
+                + ' offline command before unloading it', 20)
             cmd = mt_bin + ' -f ' + drv_dev + ' offline'
-            log('mt command: ' + cmd, 30)
+            log('mt command: ' + cmd, 20)
             result = get_shell_result(cmd)
             log_cmd_results(result)
             chk_cmd_result(result, cmd)
             if int(offline_sleep) != 0:
-                log('Sleeping for \'offline_sleep\' time of ' + offline_sleep 
+                log('Sleeping for \'offline_sleep\' time of ' + offline_sleep \
                     + ' seconds to let the drive settle before unloading it', 20)
                 sleep(int(offline_sleep))
         cmd = mtx_bin + ' -f ' + chgr_device + ' unload ' + slt + ' ' + drv_idx
@@ -969,9 +983,13 @@ else:
     try:
         config = ConfigParser(inline_comment_prefixes=('# ', ';'), interpolation=BasicInterpolation())
         config.read(config_file)
-        # Create 'config_dict' dictionary from config file
-        # ------------------------------------------------
-        config_dict = dict(config.items(config_section))
+        # Override default 'config_dict' dictionary entries from config
+        # file converting boolean strings into True/False booleans
+        # -------------------------------------------------------------
+        for k, v in config.items(config_section):
+            if k in cfg_file_true_false_lst:
+                v = config.getboolean(config_section, k)
+            config_dict[k] = v
     except Exception as err:
         print('  - An exception has occurred while reading configuration file: ' + str(err))
         print(print_opt_errors('section'))
@@ -983,22 +1001,6 @@ else:
 # -----------------------------------------------------------------------------------
 myvars = vars()
 for k, v in config_dict.items():
-    if k in cfg_file_true_false_lst:
-        # Convert all the True/False strings to booleans on the fly
-        # ---------------------------------------------------------
-        # If any lower(dictionary) true/false
-        # variable is 'true' or 'false', set it to
-        # the boolean True or False, else print an
-        # error, the instructions, and exit.
-        # ----------------------------------------
-        if v.lower() == 'true':
-            config_dict[k] = True
-        elif v.lower() == 'false':
-            config_dict[k] = False
-        else:
-            pass
-    # Set the global variable
-    # -----------------------
     myvars[k] = config_dict[k]
 
 # Assign variables from argparse Namespace
